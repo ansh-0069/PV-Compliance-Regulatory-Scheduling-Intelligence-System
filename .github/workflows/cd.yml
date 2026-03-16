@@ -1,0 +1,39 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}/api:latest ./backend
+          docker push ghcr.io/${{ github.repository }}/api:latest
+
+      - name: Build and push frontend image
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}/frontend:latest --target prod ./frontend
+          docker push ghcr.io/${{ github.repository }}/frontend:latest
+
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          script: |
+            cd /opt/pv-compliance
+            docker compose pull
+            docker compose up -d --remove-orphans
